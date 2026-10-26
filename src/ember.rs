@@ -35,7 +35,7 @@ impl Plugin for EmberPlugin {
     }
 }
 
-const EMBER_COUNT: usize = 30;
+const EMBER_COUNT: usize = 34;
 const HOVER: f32 = 1.3;
 
 #[derive(Component)]
