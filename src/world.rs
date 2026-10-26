@@ -15,7 +15,7 @@ pub struct WorldPlugin;
 impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, (spawn_terrain, spawn_water, spawn_props))
-            .add_systems(Update, (animate_water, sway, fireflies));
+            .add_systems(Update, (animate_water, sway, clear_view, fireflies));
     }
 }
 
@@ -476,6 +476,13 @@ pub struct Sway {
     base: Quat,
 }
 
+/// Trees shrink away while they block the view of the player.
+#[derive(Component)]
+struct Occluder {
+    scale: f32,
+    shown: f32,
+}
+
 #[derive(Component)]
 struct Firefly {
     anchor: Vec3,
@@ -547,6 +554,7 @@ fn spawn_props(
             MeshMaterial3d(mat.clone()),
             Transform::from_translation(p - Vec3::Y * 0.2).with_rotation(rot).with_scale(Vec3::splat(scale)),
             Sway { phase: rng.range(0.0, 6.28), strength: 0.025, base: rot },
+            Occluder { scale, shown: 1.0 },
         ));
     }
 
@@ -651,6 +659,29 @@ fn sway(time: Res<Time>, mut q: Query<(&mut Transform, &Sway)>) {
         let ax = (t * 1.3 + s.phase).sin() * s.strength * gust;
         let az = (t * 1.7 + s.phase * 1.3).sin() * s.strength * 0.7 * gust;
         tf.rotation = Quat::from_rotation_x(ax) * Quat::from_rotation_z(az) * s.base;
+    }
+}
+
+fn clear_view(
+    time: Res<Time>,
+    camera: Single<&Transform, With<Camera3d>>,
+    player: Single<&Transform, (With<crate::player::Player>, Without<Camera3d>)>,
+    mut trees: Query<(&mut Transform, &mut Occluder), (Without<Camera3d>, Without<crate::player::Player>)>,
+) {
+    let (a, b) = (camera.translation, player.translation);
+    let seg = (b - a).xz();
+    let len2 = seg.length_squared().max(1e-4);
+    let k = crate::util::damp(10.0, time.delta_secs());
+    for (mut tf, mut o) in &mut trees {
+        let c = tf.translation;
+        let t = ((c.xz() - a.xz()).dot(seg) / len2).clamp(0.0, 1.0);
+        let closest = a.lerp(b, t);
+        let blocks = t < 0.95
+            && closest.xz().distance(c.xz()) < 2.2 * o.scale
+            && closest.y < c.y + 5.5 * o.scale;
+        let target = if blocks { 0.0 } else { 1.0 };
+        o.shown += (target - o.shown) * k;
+        tf.scale = Vec3::splat(o.scale * crate::util::ease_out_back(o.shown.clamp(0.0, 1.0)).max(0.0));
     }
 }
 
