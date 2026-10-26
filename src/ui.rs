@@ -274,7 +274,6 @@ fn start_game(
         return;
     }
     if keys.just_pressed(KeyCode::Enter) || keys.just_pressed(KeyCode::Space) || mouse.just_pressed(MouseButton::Left) {
-        info!("start: keys {:?} mouse {:?}", keys.get_just_pressed().collect::<Vec<_>>(), mouse.get_just_pressed().collect::<Vec<_>>());
         sfx.write(Sfx::new(SfxKind::Start));
         next.set(GameState::Playing);
     }
